@@ -1,0 +1,29 @@
+#!/bin/bash
+
+die() { echo $* >&2; exit 1; }
+
+echo "Checking if kernel is susceptible to CVE-2016-5195 aka dirty cow"
+((UID)) && die "Must be root"
+moo=${0%/*}/moo
+[ -x $moo ] || die "Need executable $moo"
+
+string="this is a test"
+target=/var/dirtycow.tmp
+fail=0
+
+moo() {
+    # create target file, writable only by root
+    rm -f $target || die "Can't rm $target"
+    echo $string > $target || die "Can't write $target"
+    chmod 644 $target || die "Can't chmod $target"
+    # run moo as user nobody
+    su -s $moo nobody -- $1 $target || die "Can't su $moo"
+    # remember if file was altered
+    [ "$(cat $target)" != "$string" ] && fail=1
+}    
+
+# try both exploit methods
+moo; moo -p
+((fail)) && die "Kernel is susceptible"
+
+echo "Kernel is not susceptible"
